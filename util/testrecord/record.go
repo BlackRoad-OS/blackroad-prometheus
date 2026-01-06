@@ -25,8 +25,10 @@ type RefSamplesCase string
 
 const (
 	Realistic1000Samples       RefSamplesCase = "real1000"
-	Realistic1000WithSTSamples RefSamplesCase = "real1000-st"
-	WorstCase1000Samples       RefSamplesCase = "worst1000"
+	Realistic1000WithSTDeltaSamples RefSamplesCase = "real1000-dst"
+	Realistic1000WithConstSTSamples RefSamplesCase = "real1000-cst"
+	WorstCase1000       RefSamplesCase = "worst1000"
+	WorstCase1000WithSTSamples       RefSamplesCase = "worst1000-st"
 )
 
 func GenTestRefSamplesCase(t testing.TB, c RefSamplesCase) []record.RefSample {
@@ -40,7 +42,7 @@ func GenTestRefSamplesCase(t testing.TB, c RefSamplesCase) []record.RefSample {
 			ret[i].T = int64(12423423 + i + 1)
 			ret[i].V = highVarianceFloat(i)
 		}
-	case Realistic1000WithSTSamples:
+	case Realistic1000WithSTDeltaSamples:
 		for i := range ret {
 			ret[i].Ref = chunks.HeadSeriesRef(i)
 			// For cumulative or gauges, typically in one record from
@@ -49,7 +51,22 @@ func GenTestRefSamplesCase(t testing.TB, c RefSamplesCase) []record.RefSample {
 			ret[i].T = int64(12423423 + i + 1)
 			ret[i].V = highVarianceFloat(i)
 		}
-	case WorstCase1000Samples:
+	case Realistic1000WithConstSTSamples:
+		for i := range ret {
+			ret[i].Ref = chunks.HeadSeriesRef(i)
+			// For cumulative or gauges, typically in one record from
+			// scrape we would have exactly same ST and T values.
+			ret[i].ST = int64(12423423)
+			ret[i].T = int64(12423423 + i + 1)
+			ret[i].V = highVarianceFloat(i)
+		}
+	case WorstCase1000:
+		for i := range ret {
+			ret[i].Ref = chunks.HeadSeriesRef(i)
+			ret[i].T = highVarianceInt(i)
+			ret[i].V = highVarianceFloat(i)
+		}
+	case WorstCase1000WithSTSamples:
 		for i := range ret {
 			ret[i].Ref = chunks.HeadSeriesRef(i)
 

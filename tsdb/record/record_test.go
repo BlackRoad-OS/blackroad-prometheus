@@ -92,9 +92,42 @@ func TestRecord_EncodeDecode(t *testing.T) {
 		{Ref: 123, T: -1231, ST: 14, V: -123},
 		{Ref: 2, T: 0, ST: 14, V: 99999},
 	}
+	fmt.Println("orig", samplesWithST)
+	fmt.Println("enc", enc.Samples(samplesWithST, nil))
+	dec2, _ := dec.Samples(enc.Samples(samplesWithST, nil), nil)
+	fmt.Println("dec", dec2)
 	decSamplesWithST, err := dec.Samples(enc.Samples(samplesWithST, nil), nil)
 	require.NoError(t, err)
 	require.Equal(t, samplesWithST, decSamplesWithST)
+
+
+	// With ST (ST[i] == T[i-1])
+	samplesWithSTDelta := []RefSample{
+		{Ref: 0, T: 12423400, ST: 12423300, V: 1.2345},
+		{Ref: 123, T: 12423500, ST: 12423400, V: -123},
+		{Ref: 2, T: 12423600, ST: 12423500, V: 99999},
+	}
+	fmt.Println("orig", samplesWithSTDelta)
+	fmt.Println("enc", enc.Samples(samplesWithSTDelta, nil))
+	dec2, _ = dec.Samples(enc.Samples(samplesWithSTDelta, nil), nil)
+	fmt.Println("dec", dec2)
+	decSamplesWithSTDelta, err := dec.Samples(enc.Samples(samplesWithSTDelta, nil), nil)
+	require.NoError(t, err)
+	require.Equal(t, samplesWithSTDelta, decSamplesWithSTDelta)
+
+	// With ST (ST[i] == ST[i-1])
+	samplesWithConstST := []RefSample{
+		{Ref: 0, T: 12423400, ST: 12423300, V: 1.2345},
+		{Ref: 123, T: 12423500, ST: 12423300, V: -123},
+		{Ref: 2, T: 12423600, ST: 12423300, V: 99999},
+	}
+	fmt.Println("orig", samplesWithConstST)
+	fmt.Println("enc", enc.Samples(samplesWithConstST, nil))
+	dec2, _ = dec.Samples(enc.Samples(samplesWithConstST, nil), nil)
+	fmt.Println("dec", dec2)
+	decSamplesWithConstSt, err := dec.Samples(enc.Samples(samplesWithConstST, nil), nil)
+	require.NoError(t, err)
+	require.Equal(t, samplesWithConstST, decSamplesWithConstSt)
 
 	// Intervals get split up into single entries. So we don't get back exactly
 	// what we put in.

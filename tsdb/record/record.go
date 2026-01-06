@@ -319,36 +319,57 @@ func (d *Decoder) DecodeLabels(dec *encoding.Decbuf) labels.Labels {
 // Samples appends samples in rec to the given slice.
 func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) {
 	dec := encoding.Decbuf{B: rec}
-	switch typ := dec.Byte(); Type(typ) {
-	case Samples:
-		return d.samples(&dec, samples)
-	case SamplesWithST:
-		return d.samplesWithST(&dec, samples)
-	default:
-		return nil, fmt.Errorf("invalid record type %v, expected Samples(2) or SamplesWithST(11)", typ)
-	}
+	// typ := dec.Byte()
+	// switch typ := dec.Byte(); Type(typ) {
+	// case Samples:
+	return d.samples(&dec, samples)
+	// case SamplesWithST:
+	// 	return d.samplesWithST(&dec, samples)
+	// default:
+	// 	return nil, fmt.Errorf("invalid record type %v, expected Samples(2) or SamplesWithST(11)", typ)
+	// }
 }
 
 func (*Decoder) samples(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
 	if dec.Len() == 0 {
 		return samples, nil
 	}
-	var (
-		baseRef  = dec.Be64()
-		baseTime = dec.Be64int64()
-	)
 	// Allow 1 byte for each varint and 8 for the value; the output slice must be at least that big.
 	if minSize := dec.Len() / (1 + 1 + 8); cap(samples) < minSize {
 		samples = make([]RefSample, 0, minSize)
 	}
+	fmt.Println("dec start")
 	for len(dec.B) > 0 && dec.Err() == nil {
-		dref := dec.Varint64()
-		dtime := dec.Varint64()
-		val := dec.Be64()
+		var ref, t int64
+		var val uint64
 
+		if len(samples) == 0 {
+			ref = int64(dec.Varint64())
+			t = dec.Varint64()
+		} else {
+			ref = int64(samples[len(samples)-1].Ref) + dec.Varint64()
+			fmt.Println("hmmm", samples[len(samples)-1].Ref, ref)
+			t = samples[len(samples)-1].T + dec.Varint64()
+		}
+
+		stMarker := dec.Byte()
+		var ST int64
+		switch stMarker {
+		case noST:
+		case lastT:
+			ST = samples[len(samples)-1].T
+		case lastST:
+			ST = samples[len(samples)-1].ST
+		default:
+			ST = dec.Varint64()
+		}
+
+		val = dec.Be64()
+		fmt.Println("dec", chunks.HeadSeriesRef(ref), ST, t, math.Float64frombits(val))
 		samples = append(samples, RefSample{
-			Ref: chunks.HeadSeriesRef(int64(baseRef) + dref),
-			T:   baseTime + dtime,
+			Ref: chunks.HeadSeriesRef(ref),
+			ST: ST,
+			T:   t,
 			V:   math.Float64frombits(val),
 		})
 	}
@@ -362,41 +383,52 @@ func (*Decoder) samples(dec *encoding.Decbuf, samples []RefSample) ([]RefSample,
 	return samples, nil
 }
 
-func (*Decoder) samplesWithST(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
-	if dec.Len() == 0 {
-		return samples, nil
-	}
-	var (
-		baseRef  = dec.Be64()
-		baseST   = dec.Be64int64()
-		baseTime = dec.Be64int64()
-	)
-	// Allow 1 byte for each varint and 8 for the value; the output slice must be at least that big.
-	if minSize := dec.Len() / (1 + 1 + 1 + 8); cap(samples) < minSize {
-		samples = make([]RefSample, 0, minSize)
-	}
-	for len(dec.B) > 0 && dec.Err() == nil {
-		dref := dec.Varint64()
-		dST := dec.Varint64()
-		dtime := dec.Varint64()
-		val := dec.Be64()
+// func (*Decoder) samplesWithST(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
+// 	if dec.Len() == 0 {
+// 		return samples, nil
+// 	}
+// 	var (
+// 		baseRef  = dec.Be64()
+// 		baseTime = dec.Be64int64()
+// 	)
+// 	// fmt.Printf("dec header: %d %d\n", baseRef, baseTime)
+// 	// Allow 1 byte for each varint and 8 for the value; the output slice must be at least that big.
+// 	if minSize := dec.Len() / (1 + 1 + 1 + 8); cap(samples) < minSize {
+// 		samples = make([]RefSample, 0, minSize)
+// 	}
+// 	for len(dec.B) > 0 && dec.Err() == nil {
+// 		dref := dec.Varint64()
+// 		dtime := dec.Varint64()
 
-		samples = append(samples, RefSample{
-			Ref: chunks.HeadSeriesRef(int64(baseRef) + dref),
-			ST:  baseST + dST,
-			T:   baseTime + dtime,
-			V:   math.Float64frombits(val),
-		})
-	}
+// 		stMarker := dec.Byte()
+// 		var ST int64
+// 		if len(samples) > 0 && stMarker == 1 {
+// 			ST = samples[len(samples)-1].T
+// 		} else if len(samples) > 0 && stMarker == 2 {
+// 			ST = samples[len(samples)-1].ST
+// 		} else {
+// 			ST = dec.Varint64()
+// 		}
 
-	if dec.Err() != nil {
-		return nil, fmt.Errorf("decode error after %d samples: %w", len(samples), dec.Err())
-	}
-	if len(dec.B) > 0 {
-		return nil, fmt.Errorf("unexpected %d bytes left in entry", len(dec.B))
-	}
-	return samples, nil
-}
+// 		val := dec.Be64()
+// 		// fmt.Printf("dec row: %d %d %d %d\n", dref, dST, dtime, val)
+
+// 		samples = append(samples, RefSample{
+// 			Ref: chunks.HeadSeriesRef(int64(baseRef) + dref),
+// 			ST:  ST,
+// 			T:   baseTime + dtime,
+// 			V:   math.Float64frombits(val),
+// 		})
+// 	}
+
+// 	if dec.Err() != nil {
+// 		return nil, fmt.Errorf("decode error after %d samples: %w", len(samples), dec.Err())
+// 	}
+// 	if len(dec.B) > 0 {
+// 		return nil, fmt.Errorf("unexpected %d bytes left in entry", len(dec.B))
+// 	}
+// 	return samples, nil
+// }
 
 // Tombstones appends tombstones in rec to the given slice.
 func (*Decoder) Tombstones(rec []byte, tstones []tombstones.Stone) ([]tombstones.Stone, error) {
@@ -750,20 +782,17 @@ func EncodeLabels(buf *encoding.Encbuf, lbls labels.Labels) {
 	})
 }
 
+const (
+	noST byte = iota
+	lastT
+	lastST
+	explicitST
+)
+
 // Samples appends the encoded samples to b and returns the resulting slice.
 // Depending on the ST existence it either writes Samples or SamplesWithST record.
 func (e *Encoder) Samples(samples []RefSample, b []byte) []byte {
-	for _, s := range samples {
-		if s.ST != 0 {
-			return e.samplesWithST(samples, b)
-		}
-	}
-	return e.samples(samples, b)
-}
-
-func (*Encoder) samples(samples []RefSample, b []byte) []byte {
 	buf := encoding.Encbuf{B: b}
-	buf.PutByte(byte(Samples))
 
 	if len(samples) == 0 {
 		return buf.Get()
@@ -771,45 +800,98 @@ func (*Encoder) samples(samples []RefSample, b []byte) []byte {
 
 	// Store base timestamp and base reference number of first sample.
 	// All samples encode their timestamp and ref as delta to those.
-	first := samples[0]
+	for i, s := range samples {
+		if i == 0 {
+			buf.PutVarint64(int64(s.Ref))
+			buf.PutVarint64(s.T)
+			if s.ST == 0 {
+				buf.PutByte(0)
+				fmt.Println("write ", s.Ref, s.T, 0)
+			} else {
+				buf.PutByte(explicitST)
+  			buf.PutVarint64(s.ST)
+				fmt.Println("write ", s.Ref, s.T, explicitST, s.ST)
+			}
+		} else {
+			buf.PutVarint64(int64(s.Ref) - int64(samples[i-1].Ref))
+			buf.PutVarint64(s.T - samples[i-1].T)
 
-	buf.PutBE64(uint64(first.Ref))
-	buf.PutBE64int64(first.T)
-
-	for _, s := range samples {
-		buf.PutVarint64(int64(s.Ref) - int64(first.Ref))
-		buf.PutVarint64(s.T - first.T)
+			switch s.ST {
+			case 0:
+				buf.PutByte(0)
+			case samples[i-1].T:
+				fmt.Println("last T")
+				buf.PutByte(lastT)
+			case samples[i-1].ST:
+				fmt.Println("last ST")
+				buf.PutByte(lastST)
+		  default:
+			fmt.Println("custom")
+				buf.PutByte(explicitST)
+				buf.PutVarint64(s.ST)
+			}
+			fmt.Println("write ", (int64(s.Ref) - int64(samples[i-1].Ref)), (s.T - samples[i-1].T), s.V)
+		}
+		fmt.Println("write val ", s.V)
 		buf.PutBE64(math.Float64bits(s.V))
 	}
 	return buf.Get()
 }
 
-func (*Encoder) samplesWithST(samples []RefSample, b []byte) []byte {
-	buf := encoding.Encbuf{B: b}
-	buf.PutByte(byte(SamplesWithST))
+// func (*Encoder) samplesWithST(samples []RefSample, b []byte) []byte {
+// 	buf := encoding.Encbuf{B: b}
+// 	buf.PutByte(byte(SamplesWithST))
 
-	if len(samples) == 0 {
-		return buf.Get()
-	}
+// 	if len(samples) == 0 {
+// 		return buf.Get()
+// 	}
 
-	// Store base timestamp, base ST and base reference number of first sample.
-	// All samples encode their timestamp, ST and ref as delta to those.
-	// TODO(ridwanmsharif): Should the timestamp be encoded as a delta with the
-	// ST?
-	first := samples[0]
+// 	// Store base timestamp, base ST and base reference number of first sample.
+// 	// All samples encode their timestamp, ST and ref as delta to those.
+// 	// TODO(ridwanmsharif): Should the timestamp be encoded as a delta with the
+// 	// ST?
+// 	first := samples[0]
 
-	buf.PutBE64(uint64(first.Ref))
-	buf.PutBE64int64(first.ST)
-	buf.PutBE64int64(first.T)
+// 	// XXXXX ok instead, let's store the delta from T to ST
+// 	buf.PutBE64(uint64(first.Ref))
+// 	buf.PutBE64int64(first.T)
+// 	// fmt.Printf("write header: %d %d\n", uint64(first.Ref), first.T)
 
-	for _, s := range samples {
-		buf.PutVarint64(int64(s.Ref) - int64(first.Ref))
-		buf.PutVarint64(s.ST - first.ST)
-		buf.PutVarint64(s.T - first.T)
-		buf.PutBE64(math.Float64bits(s.V))
-	}
-	return buf.Get()
-}
+
+// 	// ST possibilities:
+// 	// 0: no ST
+// 	// 1: ST is last T (no followup needed)
+// 	// 2: ST is last ST
+//  // 3: custom ST
+// 	// so maybe just either 0 for "custom value" or 1 for "use last T".
+
+// 	for i, s := range samples {
+// 		// push ref
+// 		buf.PutVarint64(int64(s.Ref) - int64(first.Ref))
+
+// 		// push T
+// 		buf.PutVarint64(s.T - first.T)
+
+// 		// push ST
+// 		if i>0 && s.ST == samples[i-1].T {
+// 			// fmt.Println("last T")
+// 			buf.PutByte(1)
+// 		} else if i>0 && s.ST == samples[i-1].ST {
+// 			// fmt.Println("last ST")
+// 			buf.PutByte(2)
+// 		} else {
+// 			// fmt.Println("custom")
+// 			buf.PutByte(0)
+// 			buf.PutVarint64(s.ST)
+// 		}
+
+// 		// fmt.Printf("write: %d %d %d\n", int64(s.Ref) - int64(first.Ref), s.T - s.ST, s.T - first.T)
+
+// 		// push val
+// 		buf.PutBE64(math.Float64bits(s.V))
+// 	}
+// 	return buf.Get()
+// }
 
 // Tombstones appends the encoded tombstones to b and returns the resulting slice.
 func (*Encoder) Tombstones(tstones []tombstones.Stone, b []byte) []byte {

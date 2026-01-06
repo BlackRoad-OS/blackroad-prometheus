@@ -27,8 +27,10 @@ import (
 func TestEncodeDecode(t *testing.T) {
 	for _, tcase := range []testrecord.RefSamplesCase{
 		testrecord.Realistic1000Samples,
-		testrecord.Realistic1000WithSTSamples,
-		testrecord.WorstCase1000Samples,
+		testrecord.Realistic1000WithSTDeltaSamples,
+		testrecord.Realistic1000WithConstSTSamples,
+		testrecord.WorstCase1000,
+		testrecord.WorstCase1000WithSTSamples,
 	} {
 		var (
 			enc record.Encoder
@@ -83,8 +85,10 @@ var (
 	compressions = []compression.Type{compression.None, compression.Snappy, compression.Zstd}
 	dataCases    = []testrecord.RefSamplesCase{
 		testrecord.Realistic1000Samples,
-		testrecord.Realistic1000WithSTSamples,
-		testrecord.WorstCase1000Samples,
+		testrecord.Realistic1000WithSTDeltaSamples,
+		testrecord.Realistic1000WithConstSTSamples,
+		testrecord.WorstCase1000,
+		testrecord.WorstCase1000WithSTSamples,
 	}
 )
 
