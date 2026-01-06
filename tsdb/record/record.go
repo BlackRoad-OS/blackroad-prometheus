@@ -332,6 +332,7 @@ func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) 
 	}
 	// fmt.Println("dec start")
 	for len(dec.B) > 0 && dec.Err() == nil {
+		var prev RefSample
 		var ref, t int64
 		var val uint64
 
@@ -339,9 +340,10 @@ func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) 
 			ref = int64(dec.Varint64())
 			t = dec.Varint64()
 		} else {
-			ref = int64(samples[len(samples)-1].Ref) + dec.Varint64()
+			prev = samples[len(samples)-1]
+			ref = int64(prev.Ref) + dec.Varint64()
 			// fmt.Println("hmmm", samples[len(samples)-1].Ref, ref)
-			t = samples[len(samples)-1].T + dec.Varint64()
+			t = prev.T + dec.Varint64()
 		}
 
 		stMarker := dec.Byte()
@@ -349,11 +351,11 @@ func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) 
 		switch stMarker {
 		case noST:
 		case lastT:
-			ST = samples[len(samples)-1].T
+			ST = prev.T
 		case lastST:
-			ST = samples[len(samples)-1].ST
+			ST = prev.ST
 		default:
-			ST = dec.Varint64()
+			ST = prev.ST + dec.Varint64()
 		}
 
 		val = dec.Be64()
@@ -731,7 +733,7 @@ const (
 	noST byte = iota
 	lastT
 	lastST
-	explicitST
+	deltaST
 )
 
 // Samples appends the encoded samples to b and returns the resulting slice.
@@ -752,7 +754,7 @@ func (e *Encoder) Samples(samples []RefSample, b []byte) []byte {
 	if first.ST == 0 {
 		buf.PutByte(0)
 	} else {
-		buf.PutByte(explicitST)
+		buf.PutByte(deltaST)
 		buf.PutVarint64(first.ST)
 	}
 	buf.PutBE64(math.Float64bits(first.V))
@@ -772,8 +774,8 @@ func (e *Encoder) Samples(samples []RefSample, b []byte) []byte {
 		case prev.ST:
 			buf.PutByte(lastST)
 		default:
-			buf.PutByte(explicitST)
-			buf.PutVarint64(s.ST)
+			buf.PutByte(deltaST)
+			buf.PutVarint64(s.ST - prev.ST)
 		}
 		buf.PutBE64(math.Float64bits(s.V))
 	}
