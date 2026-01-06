@@ -100,7 +100,6 @@ func TestRecord_EncodeDecode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, samplesWithST, decSamples)
 
-
 	// With ST (ST[i] == T[i-1])
 	samplesWithSTDelta := []RefSample{
 		{Ref: 0, T: 12423400, ST: 12423300, V: 1.2345},
@@ -117,7 +116,7 @@ func TestRecord_EncodeDecode(t *testing.T) {
 		{Ref: 123, T: 12423500, ST: 12423300, V: -123},
 		{Ref: 2, T: 12423600, ST: 12423300, V: 99999},
 	}
-	decSamples,err = dec.Samples(enc.Samples(samplesWithConstST, nil), nil)
+	decSamples, err = dec.Samples(enc.Samples(samplesWithConstST, nil), nil)
 	require.NoError(t, err)
 	require.Equal(t, samplesWithConstST, decSamples)
 

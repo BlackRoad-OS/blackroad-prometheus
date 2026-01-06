@@ -330,7 +330,7 @@ func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) 
 }
 
 // Samples appends samples in rec to the given slice.
-func (d *Decoder) samplesV1(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
+func (*Decoder) samplesV1(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
 	if dec.Len() == 0 {
 		return samples, nil
 	}
@@ -363,9 +363,9 @@ func (d *Decoder) samplesV1(dec *encoding.Decbuf, samples []RefSample) ([]RefSam
 	return samples, nil
 }
 
-// SamplesV2 appends samples in rec to the given slice using the V2 algoritm,
+// SamplesV2 appends samples in rec to the given slice using the V2 algorithm,
 // which is more efficient. (See Encoder.samplesV2 definition).
-func (d *Decoder) samplesV2(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
+func (*Decoder) samplesV2(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
 	if dec.Len() == 0 {
 		return samples, nil
 	}
@@ -379,7 +379,7 @@ func (d *Decoder) samplesV2(dec *encoding.Decbuf, samples []RefSample) ([]RefSam
 		var val uint64
 
 		if len(samples) == 0 {
-			ref = int64(dec.Varint64())
+			ref = dec.Varint64()
 			t = dec.Varint64()
 		} else {
 			prev = samples[len(samples)-1]
@@ -818,7 +818,7 @@ const (
 // SamplesV2 appends the encoded samples to b and returns the resulting slice
 // using a more efficient per-sample delta encoding and allows for Start Time
 // storage.
-func (e *Encoder) samplesV2(samples []RefSample, b []byte) []byte {
+func (*Encoder) samplesV2(samples []RefSample, b []byte) []byte {
 	buf := encoding.Encbuf{B: b}
 	buf.PutByte(byte(SamplesV2))
 
