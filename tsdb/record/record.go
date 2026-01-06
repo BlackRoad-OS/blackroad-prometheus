@@ -58,8 +58,8 @@ const (
 	CustomBucketsHistogramSamples Type = 9
 	// CustomBucketsFloatHistogramSamples is used to match WAL records of type Float Histogram with custom buckets.
 	CustomBucketsFloatHistogramSamples Type = 10
-	// SamplesWithST is an enhanced sample record that allows storing an optional ST per sample.
-	SamplesWithST Type = 11
+	// SamplesV2 is an enhanced sample record with a different encoding scheme and allows storing an optional ST per sample.
+	SamplesV2 Type = 11
 )
 
 func (rt Type) String() string {
@@ -68,7 +68,7 @@ func (rt Type) String() string {
 		return "series"
 	case Samples:
 		return "samples"
-	case SamplesWithST:
+	case SamplesV2:
 		return "samples-with-st"
 	case Tombstones:
 		return "tombstones"
@@ -226,7 +226,7 @@ func (*Decoder) Type(rec []byte) Type {
 		return Unknown
 	}
 	switch t := Type(rec[0]); t {
-	case Series, Samples, SamplesWithST, Tombstones, Exemplars, MmapMarkers, Metadata, HistogramSamples, FloatHistogramSamples, CustomBucketsHistogramSamples, CustomBucketsFloatHistogramSamples:
+	case Series, Samples, SamplesV2, Tombstones, Exemplars, MmapMarkers, Metadata, HistogramSamples, FloatHistogramSamples, CustomBucketsHistogramSamples, CustomBucketsFloatHistogramSamples:
 		return t
 	}
 	return Unknown
@@ -320,9 +320,51 @@ func (d *Decoder) DecodeLabels(dec *encoding.Decbuf) labels.Labels {
 func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) {
 	dec := encoding.Decbuf{B: rec}
 
-	if Type(dec.Byte()) != Samples {
-		return nil, errors.New("invalid record type")
+	switch typ := dec.Byte(); Type(typ) {
+	case Samples:
+		return d.samplesV1(&dec, samples)
+	case SamplesV2:
+		return d.samplesV2(&dec, samples)
+	default:
+		return nil, fmt.Errorf("invalid record type %v, expected Samples(2) or SamplesV2(11)", typ)
 	}
+}
+
+// Samples appends samples in rec to the given slice.
+func (d *Decoder) samplesV1(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
+	if dec.Len() == 0 {
+		return samples, nil
+	}
+	var (
+		baseRef  = dec.Be64()
+		baseTime = dec.Be64int64()
+	)
+	// Allow 1 byte for each varint and 8 for the value; the output slice must be at least that big.
+	if minSize := dec.Len() / (1 + 1 + 8); cap(samples) < minSize {
+		samples = make([]RefSample, 0, minSize)
+	}
+	for len(dec.B) > 0 && dec.Err() == nil {
+		dref := dec.Varint64()
+		dtime := dec.Varint64()
+		val := dec.Be64()
+
+		samples = append(samples, RefSample{
+			Ref: chunks.HeadSeriesRef(int64(baseRef) + dref),
+			T:   baseTime + dtime,
+			V:   math.Float64frombits(val),
+		})
+	}
+
+	if dec.Err() != nil {
+		return nil, fmt.Errorf("decode error after %d samples: %w", len(samples), dec.Err())
+	}
+	if len(dec.B) > 0 {
+		return nil, fmt.Errorf("unexpected %d bytes left in entry", len(dec.B))
+	}
+	return samples, nil
+}
+
+func (d *Decoder) samplesV2(dec *encoding.Decbuf, samples []RefSample) ([]RefSample, error) {
 	if dec.Len() == 0 {
 		return samples, nil
 	}
@@ -739,8 +781,43 @@ const (
 // Samples appends the encoded samples to b and returns the resulting slice.
 // Depending on the ST existence it either writes Samples or SamplesWithST record.
 func (e *Encoder) Samples(samples []RefSample, b []byte) []byte {
+	// XXX: We could also just always use V2, the overhead is not that big over V1
+	// even when no ST.
+	for _, s := range samples {
+		if s.ST != 0 {
+			return e.samplesV2(samples, b)
+		}
+	}
+	return e.samplesV1(samples, b)
+}
+
+// Samples appends the encoded samples to b and returns the resulting slice.
+func (*Encoder) samplesV1(samples []RefSample, b []byte) []byte {
 	buf := encoding.Encbuf{B: b}
 	buf.PutByte(byte(Samples))
+
+	if len(samples) == 0 {
+		return buf.Get()
+	}
+
+	// Store base timestamp and base reference number of first sample.
+	// All samples encode their timestamp and ref as delta to those.
+	first := samples[0]
+
+	buf.PutBE64(uint64(first.Ref))
+	buf.PutBE64int64(first.T)
+
+	for _, s := range samples {
+		buf.PutVarint64(int64(s.Ref) - int64(first.Ref))
+		buf.PutVarint64(s.T - first.T)
+		buf.PutBE64(math.Float64bits(s.V))
+	}
+	return buf.Get()
+}
+
+func (e *Encoder) samplesV2(samples []RefSample, b []byte) []byte {
+	buf := encoding.Encbuf{B: b}
+	buf.PutByte(byte(SamplesV2))
 
 	if len(samples) == 0 {
 		return buf.Get()
