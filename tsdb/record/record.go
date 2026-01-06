@@ -360,7 +360,7 @@ func (d *Decoder) Samples(rec []byte, samples []RefSample) ([]RefSample, error) 
 		// fmt.Println("dec", chunks.HeadSeriesRef(ref), ST, t, math.Float64frombits(val))
 		samples = append(samples, RefSample{
 			Ref: chunks.HeadSeriesRef(ref),
-			ST: ST,
+			ST:  ST,
 			T:   t,
 			V:   math.Float64frombits(val),
 		})
@@ -746,39 +746,35 @@ func (e *Encoder) Samples(samples []RefSample, b []byte) []byte {
 
 	// Store base timestamp and base reference number of first sample.
 	// All samples encode their timestamp and ref as delta to those.
-	for i, s := range samples {
-		if i == 0 {
-			buf.PutVarint64(int64(s.Ref))
-			buf.PutVarint64(s.T)
-			if s.ST == 0 {
-				buf.PutByte(0)
-				// fmt.Println("write ", s.Ref, s.T, 0)
-			} else {
-				buf.PutByte(explicitST)
-  			buf.PutVarint64(s.ST)
-				// fmt.Println("write ", s.Ref, s.T, explicitST, s.ST)
-			}
-		} else {
-			buf.PutVarint64(int64(s.Ref) - int64(samples[i-1].Ref))
-			buf.PutVarint64(s.T - samples[i-1].T)
+	first := samples[0]
+	buf.PutVarint64(int64(first.Ref))
+	buf.PutVarint64(first.T)
+	if first.ST == 0 {
+		buf.PutByte(0)
+	} else {
+		buf.PutByte(explicitST)
+		buf.PutVarint64(first.ST)
+	}
+	buf.PutBE64(math.Float64bits(first.V))
 
-			switch s.ST {
-			case 0:
-				buf.PutByte(0)
-			case samples[i-1].T:
-				// fmt.Println("last T")
-				buf.PutByte(lastT)
-			case samples[i-1].ST:
-				// fmt.Println("last ST")
-				buf.PutByte(lastST)
-		  default:
-			// fmt.Println("custom")
-				buf.PutByte(explicitST)
-				buf.PutVarint64(s.ST)
-			}
-			// fmt.Println("write ", (int64(s.Ref) - int64(samples[i-1].Ref)), (s.T - samples[i-1].T), s.V)
+	for i := 1; i < len(samples); i++ {
+		s := samples[i]
+		prev := samples[i-1]
+
+		buf.PutVarint64(int64(s.Ref) - int64(prev.Ref))
+		buf.PutVarint64(s.T - prev.T)
+
+		switch s.ST {
+		case 0:
+			buf.PutByte(0)
+		case prev.T:
+			buf.PutByte(lastT)
+		case prev.ST:
+			buf.PutByte(lastST)
+		default:
+			buf.PutByte(explicitST)
+			buf.PutVarint64(s.ST)
 		}
-		// fmt.Println("write val ", s.V)
 		buf.PutBE64(math.Float64bits(s.V))
 	}
 	return buf.Get()
