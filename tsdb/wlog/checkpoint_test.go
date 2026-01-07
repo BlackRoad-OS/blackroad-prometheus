@@ -113,6 +113,7 @@ func TestDeleteCheckpoints(t *testing.T) {
 }
 
 func TestCheckpoint(t *testing.T) {
+	stPerSample := true
 	t.Parallel()
 	makeHistogram := func(i int) *histogram.Histogram {
 		return &histogram.Histogram{
@@ -175,7 +176,7 @@ func TestCheckpoint(t *testing.T) {
 		t.Run(fmt.Sprintf("compress=%s", compress), func(t *testing.T) {
 			dir := t.TempDir()
 
-			enc := record.Encoder{STPerSample: true}
+			enc := record.Encoder{STPerSample: stPerSample}
 			// Create a dummy segment to bump the initial number.
 			seg, err := CreateSegment(dir, 100)
 			require.NoError(t, err)
@@ -294,7 +295,7 @@ func TestCheckpoint(t *testing.T) {
 
 			stats, err := Checkpoint(promslog.NewNopLogger(), w, 100, 106, func(x chunks.HeadSeriesRef) bool {
 				return x%2 == 0
-			}, last/2, true)
+			}, last/2, stPerSample)
 			require.NoError(t, err)
 			require.NoError(t, w.Truncate(107))
 			require.NoError(t, DeleteCheckpoints(w.Dir(), 106))
@@ -324,7 +325,7 @@ func TestCheckpoint(t *testing.T) {
 				case record.Series:
 					series, err = dec.Series(rec, series)
 					require.NoError(t, err)
-				case record.Samples:
+				case record.Samples, record.SamplesV2:
 					samples, err := dec.Samples(rec, nil)
 					require.NoError(t, err)
 					for _, s := range samples {

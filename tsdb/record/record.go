@@ -164,7 +164,7 @@ type RefSeries struct {
 // RefSample is a timestamp/st/value struct associated with a reference to a series.
 // TODO(beorn7): Perhaps make this "polymorphic", including histogram and float-histogram pointers? Then get rid of RefHistogramSample.
 type RefSample struct {
-	Ref   chunks.HeadSeriesRef
+	Ref chunks.HeadSeriesRef
 	// ST is Start Time and exists for forward compatibility. It is currently
 	// unused in calling code.
 	ST, T int64
@@ -778,7 +778,7 @@ func EncodeLabels(buf *encoding.Encbuf, lbls labels.Labels) {
 // Samples appends the encoded samples to b and returns the resulting slice.
 // Depending on the ST existence it either writes Samples or SamplesWithST record.
 func (e *Encoder) Samples(samples []RefSample, b []byte) []byte {
-	if  e.STPerSample {
+	if e.STPerSample {
 		return e.samplesV2(samples, b)
 	}
 	return e.samplesV1(samples, b)

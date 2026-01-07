@@ -154,7 +154,7 @@ func readTestWAL(t testing.TB, dir string) (recs []any) {
 			series, err := dec.Series(rec, nil)
 			require.NoError(t, err)
 			recs = append(recs, series)
-		case record.Samples:
+		case record.Samples, record.SamplesV2:
 			samples, err := dec.Samples(rec, nil)
 			require.NoError(t, err)
 			recs = append(recs, samples)

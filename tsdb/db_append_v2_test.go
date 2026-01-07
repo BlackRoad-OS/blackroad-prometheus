@@ -193,7 +193,7 @@ func TestDataNotAvailableAfterRollback_AppendV2(t *testing.T) {
 			require.NoError(t, err)
 			walSeriesCount += len(series)
 
-		case record.Samples:
+		case record.Samples, record.SamplesV2:
 			var samples []record.RefSample
 			samples, err = dec.Samples(rec, samples)
 			require.NoError(t, err)
@@ -3273,7 +3273,7 @@ func testOOOWALWriteAppendV2(t *testing.T,
 				series, err := dec.Series(rec, nil)
 				require.NoError(t, err)
 				records = append(records, series)
-			case record.Samples:
+			case record.Samples, record.SamplesV2:
 				samples, err := dec.Samples(rec, nil)
 				require.NoError(t, err)
 				records = append(records, samples)

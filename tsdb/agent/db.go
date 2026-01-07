@@ -490,7 +490,7 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 					return
 				}
 				decoded <- series
-			case record.Samples:
+			case record.Samples, record.SamplesV2:
 				samples := db.walReplaySamplesPool.Get()[:0]
 				samples, err = dec.Samples(rec, samples)
 				if err != nil {
@@ -1147,7 +1147,7 @@ func (a *appenderBase) log() error {
 	a.mtx.RLock()
 	defer a.mtx.RUnlock()
 
-	encoder := record.Encoder{STPerSample: a.DB.opts.EnableStartTimePerSample}
+	encoder := record.Encoder{STPerSample: a.opts.EnableStartTimePerSample}
 	buf := a.bufPool.Get().([]byte)
 	defer func() {
 		a.bufPool.Put(buf) //nolint:staticcheck
@@ -1272,7 +1272,7 @@ func (a *appenderBase) logSeries() error {
 			a.bufPool.Put(buf) //nolint:staticcheck
 		}()
 
-		encoder := record.Encoder{STPerSample: a.DB.opts.EnableStartTimePerSample}
+		encoder := record.Encoder{STPerSample: a.opts.EnableStartTimePerSample}
 		buf = encoder.Series(a.pendingSeries, buf)
 		if err := a.wal.Log(buf); err != nil {
 			return err
