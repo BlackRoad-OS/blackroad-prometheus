@@ -188,7 +188,7 @@ type RefExemplar struct {
 }
 
 // RefHistogramSample is a histogram.
-// TODO(bwplotka): Add support for ST.
+// TODO(owilliams): Add support for ST.
 type RefHistogramSample struct {
 	Ref chunks.HeadSeriesRef
 	T   int64
@@ -196,7 +196,7 @@ type RefHistogramSample struct {
 }
 
 // RefFloatHistogramSample is a float histogram.
-// TODO(bwplotka): Add support for ST.
+// TODO(owilliams): Add support for ST.
 type RefFloatHistogramSample struct {
 	Ref chunks.HeadSeriesRef
 	T   int64
